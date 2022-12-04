@@ -47,19 +47,23 @@ def init(repo):
     print('initialized empty repository: {}'.format(repo))
 
 
-def hash_object(data, obj_type, write=True):
-    """Compute hash of object data of given type and write to object store if
-    "write" is True. Return SHA-1 object hash as hex string.
+def hash_object(data, obj_type):
+    """Compute hash of object data of given type.
+    Return SHA-1 object hash as hex string.
     """
-    header = '{} {}'.format(obj_type, len(data)).encode()
-    full_data = header + b'\x00' + data
-    sha1 = hashlib.sha1(full_data).hexdigest()
-    if write:
-        path = os.path.join('.git', 'objects', sha1[:2], sha1[2:])
-        if not os.path.exists(path):
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            write_file(path, zlib.compress(full_data))
-    return sha1
+    header = f"{obj_type} {len(data)}".encode()
+    object_data = header + b"\x00" + data
+    sha1 = hashlib.sha1(object_data).hexdigest()
+
+    return sha1, object_data
+
+
+def write_object(sha1, object_data):
+    """Write to object store"""
+    path = Path('.git', 'objects', sha1[:2], sha1[2:])
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_file(path, zlib.compress(object_data))
 
 
 def find_object(sha1_prefix):
@@ -171,14 +175,14 @@ def get_status():
     """Get status of working copy, return tuple of (changed_paths, new_paths,
     deleted_paths).
     """
-    # Find recursively all files in the current directory that are not under the ./git directory.
-    paths = [p for p in Path('.').glob('**/*') if p.parts[0] != ".git"]
-    paths = set(paths)
+    # Find recursively all files in the current directory that are not under the
+    # ./git directory.
+    paths = set([p for p in Path('.').glob('**/*') if p.parts[0] != ".git"])
     entries_by_path = {Path(e.path): e for e in read_index()}
-    print(entries_by_path)
     entry_paths = set(entries_by_path)
+
     changed = {p for p in (paths & entry_paths)
-               if hash_object(read_file(p), 'blob', write=False) !=
+               if hash_object(read_file(p), 'blob')[0] !=
                   entries_by_path[p].sha1.hex()}
     new = paths - entry_paths
     deleted = entry_paths - paths
@@ -247,7 +251,7 @@ def add(paths):
     all_entries = read_index()
     entries = [e for e in all_entries if e.path not in paths]
     for path in paths:
-        sha1 = hash_object(read_file(path), 'blob')
+        sha1, _ = hash_object(read_file(path), 'blob')
         st = os.stat(path)
         flags = len(path.encode())
         assert flags < (1 << 12)
@@ -269,7 +273,7 @@ def write_tree():
         mode_path = '{:o} {}'.format(entry.mode, entry.path).encode()
         tree_entry = mode_path + b'\x00' + entry.sha1
         tree_entries.append(tree_entry)
-    return hash_object(b''.join(tree_entries), 'tree')
+    return hash_object(b''.join(tree_entries), 'tree')[0]
 
 
 def get_local_master_hash():
@@ -306,7 +310,7 @@ def commit(message, author=None):
     lines.append(message)
     lines.append('')
     data = '\n'.join(lines).encode()
-    sha1 = hash_object(data, 'commit')
+    sha1, _ = hash_object(data, 'commit')
     master_path = os.path.join('.git', 'refs', 'heads', 'master')
     write_file(master_path, (sha1 + '\n').encode())
     print('committed to master: {:7}'.format(sha1))
@@ -572,7 +576,8 @@ if __name__ == '__main__':
     elif args.command == 'diff':
         diff()
     elif args.command == 'hash-object':
-        sha1 = hash_object(read_file(args.path), args.type, write=args.write)
+        sha1, object_data = hash_object(read_file(args.path), args.type)
+        write_object(sha1, object_data)
         print(sha1)
     elif args.command == 'init':
         init(args.repo)
