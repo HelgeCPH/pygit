@@ -210,22 +210,21 @@ def status():
 def diff():
     """Show diff of files changed (between index and working copy)."""
     changed, _, _ = get_status()
-    entries_by_path = {e.path: e for e in read_index()}
-    for i, path in enumerate(changed):
+    entries_by_path = {Path(e.path): e for e in read_index()}
+    for idx, path in enumerate(changed):
         sha1 = entries_by_path[path].sha1.hex()
         obj_type, data = read_object(sha1)
         assert obj_type == 'blob'
         index_lines = data.decode().splitlines()
         working_lines = read_file(path).decode().splitlines()
-        diff_lines = difflib.unified_diff(
-                index_lines, working_lines,
-                '{} (index)'.format(path),
-                '{} (working copy)'.format(path),
+        diff_lines = difflib.unified_diff(index_lines, working_lines,
+                f"{path} (index)",
+                f"{path} (working copy)",
                 lineterm='')
         for line in diff_lines:
             print(line)
-        if i < len(changed) - 1:
-            print('-' * 70)
+        if idx < len(changed) - 1:
+            print("--------" * 10)
 
 
 def write_index(entries):
@@ -535,8 +534,6 @@ if __name__ == '__main__':
     sub_parser.add_argument('-t', choices=['commit', 'tree', 'blob'],
             default='blob', dest='type',
             help='type of object (default %(default)r)')
-    sub_parser.add_argument('-w', action='store_true', dest='write',
-            help='write object to object store (as well as printing hash)')
 
     sub_parser = sub_parsers.add_parser('init',
             help='initialize a new repo')
@@ -578,7 +575,6 @@ if __name__ == '__main__':
         diff()
     elif args.command == 'hash-object':
         sha1, object_data = hash_object(read_file(args.path), args.type)
-        write_object(sha1, object_data)
         print(sha1)
     elif args.command == 'init':
         init(args.repo)
