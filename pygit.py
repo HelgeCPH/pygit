@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Implement just enough git to commit and push to GitHub.
 
 Read the story here: http://benhoyt.com/writings/pygit/
