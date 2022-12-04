@@ -7,7 +7,7 @@ Released under a permissive MIT license (see LICENSE.txt).
 
 import argparse, collections, difflib, enum, hashlib, operator, os, stat
 import struct, sys, time, urllib.request, zlib
-
+from pathlib import Path
 
 # Data for one entry in the git index (.git/index)
 IndexEntry = collections.namedtuple('IndexEntry', [
@@ -129,7 +129,7 @@ def cat_file(mode, sha1_prefix):
 def read_index():
     """Read git index file and return list of IndexEntry objects."""
     try:
-        data = read_file(os.path.join('.git', 'index'))
+        data = read_file(Path('.git', 'index'))
     except FileNotFoundError:
         return []
     digest = hashlib.sha1(data[:-20]).digest()
@@ -171,16 +171,11 @@ def get_status():
     """Get status of working copy, return tuple of (changed_paths, new_paths,
     deleted_paths).
     """
-    paths = set()
-    for root, dirs, files in os.walk('.'):
-        dirs[:] = [d for d in dirs if d != '.git']
-        for file in files:
-            path = os.path.join(root, file)
-            path = path.replace('\\', '/')
-            if path.startswith('./'):
-                path = path[2:]
-            paths.add(path)
-    entries_by_path = {e.path: e for e in read_index()}
+    # Find recursively all files in the current directory that are not under the ./git directory.
+    paths = [p for p in Path('.').glob('**/*') if p.parts[0] != ".git"]
+    paths = set(paths)
+    entries_by_path = {Path(e.path): e for e in read_index()}
+    print(entries_by_path)
     entry_paths = set(entries_by_path)
     changed = {p for p in (paths & entry_paths)
                if hash_object(read_file(p), 'blob', write=False) !=
